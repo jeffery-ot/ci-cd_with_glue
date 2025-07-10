@@ -1,6 +1,5 @@
 name: Glue Job CI/CD
 
-# Trigger workflow on pushes to dev or main, and pull requests into main
 on:
   push:
     branches: [dev, main]
@@ -14,15 +13,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code from the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Build and start the local Glue container using Docker Compose
       - name: Build and start Glue container
         run: docker compose up -d --build
 
-      # Step 3: Run the Glue job inside the running container using spark-submit
       - name: Run Glue job using spark-submit
         run: |
           CONTAINER_ID=$(docker ps -qf "name=glue_pyspark")
@@ -35,11 +31,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Configure AWS credentials using GitHub Secrets
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -47,11 +41,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Step 3: Upload the Glue script to the specified S3 path
       - name: Upload Glue script to S3
         run: aws s3 cp glue_jobs/glue_main.py ${{ secrets.S3_SCRIPT_PATH }}
 
-      # Step 4: Create or update the Glue job using AWS CLI
       - name: Create or Update AWS Glue Job
         run: |
           JOB_NAME="${{ secrets.GLUE_JOB_NAME }}"
@@ -63,13 +55,15 @@ jobs:
           if aws glue get-job --job-name "$JOB_NAME" >/dev/null 2>&1; then
             echo "Updating Glue job..."
 
-            echo '{
-              "Command": {
-                "Name": "glueetl",
-                "ScriptLocation": "'"$SCRIPT_PATH"'",
-                "PythonVersion": "3"
-              }
-            }' > job-update.json
+            cat <<EOF > job-update.json
+{
+  "Command": {
+    "Name": "glueetl",
+    "ScriptLocation": "$SCRIPT_PATH",
+    "PythonVersion": "3"
+  }
+}
+EOF
 
             aws glue update-job \
               --job-name "$JOB_NAME" \
@@ -77,18 +71,20 @@ jobs:
           else
             echo "Creating Glue job..."
 
-            echo '{
-              "Name": "'"$JOB_NAME"'",
-              "Role": "'"$ROLE_ARN"'",
-              "Command": {
-                "Name": "glueetl",
-                "ScriptLocation": "'"$SCRIPT_PATH"'",
-                "PythonVersion": "3"
-              },
-              "GlueVersion": "4.0",
-              "MaxCapacity": 2,
-              "Timeout": 10
-            }' > job-create.json
+            cat <<EOF > job-create.json
+{
+  "Name": "$JOB_NAME",
+  "Role": "$ROLE_ARN",
+  "Command": {
+    "Name": "glueetl",
+    "ScriptLocation": "$SCRIPT_PATH",
+    "PythonVersion": "3"
+  },
+  "GlueVersion": "4.0",
+  "MaxCapacity": 2,
+  "Timeout": 10
+}
+EOF
 
             aws glue create-job --cli-input-json file://job-create.json
           fi
