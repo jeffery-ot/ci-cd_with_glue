@@ -9,9 +9,8 @@ on:
 
 jobs:
   test-glue-job:
-    name: Test Glue Job (dev)
-    # Only run this job on the 'dev' branch
-    if: github.ref == 'refs/heads/dev'
+    name: Test Glue Job
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +30,6 @@ jobs:
 
   deploy-glue-job:
     name: Deploy Glue Job (main)
-    # Only run on 'main' branch, and only after test-glue-job completes
     if: github.ref == 'refs/heads/main'
     needs: test-glue-job
     runs-on: ubuntu-latest
@@ -61,12 +59,10 @@ jobs:
           ROLE_ARN="${{ secrets.GLUE_ROLE_ARN }}"
 
           echo "Checking if Glue job '$JOB_NAME' exists..."
-          
-          # If the job exists, update it with new script path and config
+
           if aws glue get-job --job-name "$JOB_NAME" >/dev/null 2>&1; then
             echo "Updating Glue job..."
 
-            # Write the update config JSON
             echo '{
               "Command": {
                 "Name": "glueetl",
@@ -75,16 +71,12 @@ jobs:
               }
             }' > job-update.json
 
-            # Run update command
             aws glue update-job \
               --job-name "$JOB_NAME" \
               --job-update file://job-update.json
-          
-          # If the job doesn't exist, create it from scratch
           else
             echo "Creating Glue job..."
 
-            # Write the create config JSON
             echo '{
               "Name": "'"$JOB_NAME"'",
               "Role": "'"$ROLE_ARN"'",
@@ -98,6 +90,5 @@ jobs:
               "Timeout": 10
             }' > job-create.json
 
-            # Run create command
             aws glue create-job --cli-input-json file://job-create.json
           fi
