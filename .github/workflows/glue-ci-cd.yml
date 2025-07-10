@@ -8,10 +8,9 @@ on:
     branches: [main]
 
 jobs:
-  test-glue-job:
-    name: Test Glue Job (dev)
-    # Only run this job on the 'dev' branch
-    if: github.ref == 'refs/heads/dev'
+    test-glue-job:
+    name: Test Glue Job
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
