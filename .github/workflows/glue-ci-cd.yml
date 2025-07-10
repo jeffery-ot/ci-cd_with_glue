@@ -1,5 +1,6 @@
 name: Glue Job CI/CD
 
+# Trigger workflow on pushes to dev or main, and pull requests into main
 on:
   push:
     branches: [dev, main]
@@ -13,12 +14,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout the source code
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Step 2: Build and run local Glue environment using Docker Compose
       - name: Build and start Glue container
         run: docker compose up -d --build
 
+      # Step 3: Run the Glue job using spark-submit inside the running container
       - name: Run Glue job using spark-submit
         run: |
           CONTAINER_ID=$(docker ps -qf "name=glue_pyspark")
@@ -26,14 +30,16 @@ jobs:
 
   deploy-glue-job:
     name: Deploy Glue Job (main)
-    if: github.ref == 'refs/heads/main'
-    needs: test-glue-job
+    if: github.ref == 'refs/heads/main' # Only deploy on main branch
+    needs: test-glue-job # Run this job only after test-glue-job succeeds
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout the source code
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Step 2: Configure AWS credentials from GitHub Secrets
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -41,20 +47,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Step 3: Upload Glue script to S3
       - name: Upload Glue script to S3
         run: aws s3 cp glue_jobs/glue_main.py ${{ secrets.S3_SCRIPT_PATH }}
 
+      # Step 4: Create or update the Glue Job based on existence
       - name: Create or Update AWS Glue Job
         run: |
+          # Set environment variables from secrets
           JOB_NAME="${{ secrets.GLUE_JOB_NAME }}"
           SCRIPT_PATH="${{ secrets.S3_SCRIPT_PATH }}"
           ROLE_ARN="${{ secrets.GLUE_ROLE_ARN }}"
 
           echo "Checking if Glue job '$JOB_NAME' exists..."
 
+          # Check if the Glue job already exists
           if aws glue get-job --job-name "$JOB_NAME" >/dev/null 2>&1; then
             echo "Updating Glue job..."
 
+            # If it exists, update the job's script location and command
             aws glue update-job \
               --job-name "$JOB_NAME" \
               --job-update "$(jq -n \
@@ -69,6 +80,7 @@ jobs:
           else
             echo "Creating Glue job..."
 
+            # If it doesn't exist, create a new Glue job with full config
             aws glue create-job \
               --cli-input-json "$(jq -n \
                 --arg name "$JOB_NAME" \
