@@ -55,36 +55,25 @@ jobs:
           if aws glue get-job --job-name "$JOB_NAME" >/dev/null 2>&1; then
             echo "Updating Glue job..."
 
-            cat <<EOF > job-update.json
-{
-  "Command": {
-    "Name": "glueetl",
-    "ScriptLocation": "$SCRIPT_PATH",
-    "PythonVersion": "3"
-  }
-}
-EOF
-
             aws glue update-job \
               --job-name "$JOB_NAME" \
-              --job-update file://job-update.json
+              --job-update "$(jq -n \
+                --arg scriptPath "$SCRIPT_PATH" \
+                '{
+                  Command: {
+                    Name: "glueetl",
+                    ScriptLocation: $scriptPath,
+                    PythonVersion: "3"
+                  }
+                }')"
           else
             echo "Creating Glue job..."
 
-            cat <<EOF > job-create.json
-{
-  "Name": "$JOB_NAME",
-  "Role": "$ROLE_ARN",
-  "Command": {
-    "Name": "glueetl",
-    "ScriptLocation": "$SCRIPT_PATH",
-    "PythonVersion": "3"
-  },
-  "GlueVersion": "4.0",
-  "MaxCapacity": 2,
-  "Timeout": 10
-}
-EOF
-
-            aws glue create-job --cli-input-json file://job-create.json
+            aws glue create-job \
+              --name "$JOB_NAME" \
+              --role "$ROLE_ARN" \
+              --command Name=glueetl,ScriptLocation=$SCRIPT_PATH,PythonVersion=3 \
+              --glue-version "4.0" \
+              --max-capacity 2 \
+              --timeout 10
           fi
