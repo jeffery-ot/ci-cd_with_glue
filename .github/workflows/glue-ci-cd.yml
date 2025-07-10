@@ -53,32 +53,32 @@ jobs:
           echo "Preparing job definition JSON files..."
 
           cat > job-command.json <<EOF
-          {
-            "Name": "glueetl",
-            "ScriptLocation": "$SCRIPT_PATH",
-            "PythonVersion": "3"
-          }
+{
+  "Name": "glueetl",
+  "ScriptLocation": "$SCRIPT_PATH",
+  "PythonVersion": "3"
+}
 EOF
 
           cat > job-update.json <<EOF
-          {
-            "Command": {
-              "Name": "glueetl",
-              "ScriptLocation": "$SCRIPT_PATH",
-              "PythonVersion": "3"
-            }
-          }
+{
+  "Command": {
+    "Name": "glueetl",
+    "ScriptLocation": "$SCRIPT_PATH",
+    "PythonVersion": "3"
+  }
+}
 EOF
 
           echo "Checking if Glue job '$JOB_NAME' exists..."
 
           if aws glue get-job --job-name "$JOB_NAME" &>/dev/null; then
-            echo "Updating Glue job: $JOB_NAME"
+            echo " Updating Glue job: $JOB_NAME"
             aws glue update-job \
               --job-name "$JOB_NAME" \
               --job-update file://job-update.json
           else
-            echo "Creating Glue job: $JOB_NAME"
+            echo " Creating Glue job: $JOB_NAME"
             aws glue create-job \
               --name "$JOB_NAME" \
               --role "$ROLE_ARN" \
