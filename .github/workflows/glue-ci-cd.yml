@@ -1,0 +1,65 @@
+name: Glue Job CI/CD
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-glue-job:
+    name: Test Glue Job (dev)
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build and Start Glue Container
+        run: docker compose up -d --build
+
+      - name: Run Glue Job with spark-submit
+        run: |
+          CONTAINER_ID=$(docker ps -qf "name=glue_pyspark")
+          docker exec $CONTAINER_ID bash -c "cd /home/glue_user/workspace/glue_jobs && spark-submit glue_main.py"
+
+  deploy-glue-job:
+    name: Deploy Glue Job (main)
+    if: github.ref == 'refs/heads/main'
+    needs: test-glue-job
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Glue Script to S3
+        run: aws s3 cp glue_jobs/glue_main.py ${{ secrets.S3_SCRIPT_PATH }}
+
+      - name: Create or Update Glue Job
+        run: |
+          JOB_NAME="${{ secrets.GLUE_JOB_NAME }}"
+          SCRIPT_PATH="${{ secrets.S3_SCRIPT_PATH }}"
+          ROLE_ARN="${{ secrets.GLUE_ROLE_ARN }}"
+
+          if aws glue get-job --job-name "$JOB_NAME" &>/dev/null; then
+            echo "Updating Glue Job: $JOB_NAME"
+            aws glue update-job \
+              --job-name "$JOB_NAME" \
+              --job-update "{\"Command\":{\"Name\":\"glueetl\",\"ScriptLocation\":\"$SCRIPT_PATH\",\"PythonVersion\":\"3\"}}"
+          else
+            echo " Creating Glue Job: $JOB_NAME"
+            aws glue create-job \
+              --name "$JOB_NAME" \
+              --role "$ROLE_ARN" \
+              --command "{\"Name\":\"glueetl\",\"ScriptLocation\":\"$SCRIPT_PATH\",\"PythonVersion\":\"3\"}" \
+              --glue-version "4.0" \
+              --max-capacity 2 \
+              --timeout 10
+          fi

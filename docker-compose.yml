@@ -4,12 +4,12 @@ services:
     image: public.ecr.aws/glue/aws-glue-libs:5
     command: ["pyspark"]
     volumes:
-      - "${WORKSPACE_LOCATION}:/home/glue_user/workspace/" # Mount your project workspace
+      - "./:/home/glue_user/workspace/" # Mount your project workspace
     environment:
       - DISABLE_SSL=true
     ports:
-      - "4040:4040"    # Spark UI
-      - "18080:18080"  # Spark History Server 
+      - "4042:4040"    # Spark UI
+      - "18082:18080"  # Spark History Server 
     tty: true
     stdin_open: true
     deploy:
