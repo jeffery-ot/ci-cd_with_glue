@@ -65,12 +65,14 @@ jobs:
           if aws glue get-job --job-name "$JOB_NAME" >/dev/null 2>&1; then
             echo "Updating Glue job..."
 
-            # If it exists, update the job's script location and command
+            # If it exists, update the job's script location, command, and role
             aws glue update-job \
               --job-name "$JOB_NAME" \
               --job-update "$(jq -n \
                 --arg scriptPath "$SCRIPT_PATH" \
+                --arg role "$ROLE_ARN" \
                 '{
+                  Role: $role,
                   Command: {
                     Name: "glueetl",
                     ScriptLocation: $scriptPath,
